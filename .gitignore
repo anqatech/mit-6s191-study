@@ -1,0 +1,46 @@
+# macOS
+.DS_Store
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local Python environments
+.venv/
+venv/
+env/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Test, type-checker, and linter caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*~
+
+# Generated training artifacts and experiment logs
+checkpoints/
+runs/
+wandb/
+*.ckpt
+*.pt
+*.pth
+
+# Large or externally sourced data
+data/raw/
+data/external/
+
