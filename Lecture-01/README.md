@@ -245,6 +245,268 @@ $$
 This cancellation is one reason sigmoid and binary cross-entropy form a useful
 pair for binary classification.
 
+#### Worked derivation: the $2\rightarrow2\rightarrow1$ XOR network
+
+The hidden-layer notebook stores the $N$ training examples as **rows**, rather
+than deriving one example at a time as column vectors. Let the input dimension
+be $d=2$ and the hidden width be $h=2$. The forward-pass quantities have these
+shapes:
+
+| Quantity | Shape |
+| --- | --- |
+| $\mathbf X$ | $(N,d)$ |
+| $\mathbf W_1$ | $(d,h)$ |
+| $\mathbf b_1$ | $(1,h)$ |
+| $\mathbf Z_1,\mathbf A_1$ | $(N,h)$ |
+| $\mathbf W_2$ | $(h,1)$ |
+| $b_2$ | $(1,1)$ |
+| $\mathbf Z_2,\hat{\mathbf y},\mathbf y$ | $(N,1)$ |
+
+The forward pass is
+
+$$
+\mathbf Z_1=\mathbf X\mathbf W_1+\mathbf b_1,
+\qquad
+\mathbf A_1=\tanh(\mathbf Z_1),
+$$
+
+$$
+\mathbf Z_2=\mathbf A_1\mathbf W_2+b_2,
+\qquad
+\hat{\mathbf y}=\sigma(\mathbf Z_2).
+$$
+
+The biases are broadcast across the $N$ rows. Define
+
+$$
+d\mathbf Q\equiv\frac{\partial J}{\partial\mathbf Q},
+$$
+
+so $d\mathbf Q$ always has the same shape as $\mathbf Q$.
+
+##### Step 1: derivative at the output logits
+
+For example $i$, the binary cross-entropy loss is
+
+$$
+\mathcal L_i
+=-\left[
+y_i\log(\hat y_i)+(1-y_i)\log(1-\hat y_i)
+\right],
+\qquad
+\hat y_i=\sigma(z_{2,i}).
+$$
+
+Differentiate both parts of the composition:
+
+$$
+\frac{\partial\mathcal L_i}{\partial\hat y_i}
+=-\frac{y_i}{\hat y_i}
+ +\frac{1-y_i}{1-\hat y_i}
+=\frac{\hat y_i-y_i}{\hat y_i(1-\hat y_i)},
+$$
+
+$$
+\frac{\partial\hat y_i}{\partial z_{2,i}}
+=\hat y_i(1-\hat y_i).
+$$
+
+The chain rule cancels the probability factors:
+
+$$
+\frac{\partial\mathcal L_i}{\partial z_{2,i}}
+=\frac{\partial\mathcal L_i}{\partial\hat y_i}
+ \frac{\partial\hat y_i}{\partial z_{2,i}}
+=\hat y_i-y_i.
+$$
+
+Because the empirical loss is the mean
+
+$$
+J=\frac{1}{N}\sum_{i=1}^{N}\mathcal L_i,
+$$
+
+the batch error at the output logits is
+
+$$
+\boxed{
+d\mathbf Z_2=\frac{1}{N}(\hat{\mathbf y}-\mathbf y)
+}
+\qquad\text{with shape }(N,1).
+$$
+
+##### Step 2: gradients of the output-layer parameters
+
+For one example,
+
+$$
+z_{2,i}=\sum_{j=1}^{h}A_{1,ij}W_{2,j}+b_2.
+$$
+
+For an output weight $W_{2,j}$,
+
+$$
+\frac{\partial z_{2,i}}{\partial W_{2,j}}=A_{1,ij}.
+$$
+
+Summing the contribution from every example gives
+
+$$
+\frac{\partial J}{\partial W_{2,j}}
+=\sum_{i=1}^{N}
+\frac{\partial J}{\partial z_{2,i}}
+\frac{\partial z_{2,i}}{\partial W_{2,j}}
+=\sum_{i=1}^{N}(dZ_2)_iA_{1,ij}.
+$$
+
+This is the matrix product
+
+$$
+\boxed{
+d\mathbf W_2=\mathbf A_1^{\mathsf T}d\mathbf Z_2
+}
+\qquad\text{with shape }(h,1).
+$$
+
+Since $\partial z_{2,i}/\partial b_2=1$,
+
+$$
+\boxed{
+db_2=\sum_{i=1}^{N}(dZ_2)_i
+}
+\qquad\text{with shape }(1,1).
+$$
+
+The sum is over examples only. The $1/N$ averaging factor is already contained
+inside $d\mathbf Z_2$.
+
+##### Step 3: propagate the error into the hidden activations
+
+The hidden activation $A_{1,ij}$ affects only the corresponding example's
+output logit, and
+
+$$
+\frac{\partial z_{2,i}}{\partial A_{1,ij}}=W_{2,j}.
+$$
+
+Therefore,
+
+$$
+(dA_1)_{ij}
+=\frac{\partial J}{\partial A_{1,ij}}
+=(dZ_2)_iW_{2,j}.
+$$
+
+Writing every example and hidden neuron simultaneously gives
+
+$$
+\boxed{
+d\mathbf A_1=d\mathbf Z_2\mathbf W_2^{\mathsf T}
+}
+\qquad\text{with shape }(N,h).
+$$
+
+##### Step 4: propagate through the elementwise $\tanh$
+
+For every example $i$ and hidden neuron $j$,
+
+$$
+A_{1,ij}=\tanh(Z_{1,ij}),
+\qquad
+\frac{\partial A_{1,ij}}{\partial Z_{1,ij}}
+=1-A_{1,ij}^{2}.
+$$
+
+The componentwise chain rule is therefore
+
+$$
+\boxed{
+(dZ_1)_{ij}
+=(dA_1)_{ij}\left(1-A_{1,ij}^{2}\right)
+}.
+$$
+
+There is no matrix square in this expression. If
+$\mathbf 1_{N\times h}$ denotes an array of ones matching the hidden
+activation's shape, the complete batch can be written as
+
+$$
+\boxed{
+d\mathbf Z_1
+=d\mathbf A_1\odot
+\left(
+\mathbf 1_{N\times h}-\mathbf A_1\odot\mathbf A_1
+\right)
+}
+\qquad\text{with shape }(N,h),
+$$
+
+where $\odot$ means elementwise multiplication.
+
+##### Step 5: gradients of the input-to-hidden parameters
+
+Each hidden pre-activation is
+
+$$
+Z_{1,ij}
+=\sum_{k=1}^{d}X_{ik}W_{1,kj}+b_{1,j}.
+$$
+
+For one weight $W_{1,kj}$,
+
+$$
+\frac{\partial Z_{1,ij}}{\partial W_{1,kj}}=X_{ik},
+$$
+
+so
+
+$$
+\frac{\partial J}{\partial W_{1,kj}}
+=\sum_{i=1}^{N}(dZ_1)_{ij}X_{ik}.
+$$
+
+In matrix form,
+
+$$
+\boxed{
+d\mathbf W_1=\mathbf X^{\mathsf T}d\mathbf Z_1
+}
+\qquad\text{with shape }(d,h).
+$$
+
+Because $\partial Z_{1,ij}/\partial b_{1,j}=1$,
+
+$$
+\boxed{
+(d b_1)_j=\sum_{i=1}^{N}(dZ_1)_{ij}
+}
+\qquad\text{with shape }(1,h).
+$$
+
+Again, the sum is across examples, not across hidden neurons: each hidden
+neuron has its own bias and therefore its own bias gradient.
+
+##### Complete backward sequence
+
+The complete computation is
+
+$$
+\boxed{
+d\mathbf Z_2
+\longrightarrow
+\{d\mathbf W_2,db_2\}
+\longrightarrow
+d\mathbf A_1
+\longrightarrow
+d\mathbf Z_1
+\longrightarrow
+\{d\mathbf W_1,d\mathbf b_1\}
+}.
+$$
+
+With the averaging factor placed in $d\mathbf Z_2$, none of the downstream
+gradients should be divided by $N$ again.
+
 ### 7. Full-batch, stochastic, and mini-batch gradients
 
 The exact full-dataset gradient is
